@@ -1,0 +1,295 @@
+name: Custom Windows Snapshot
+
+on:
+  push:
+    branches:
+      - custom
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Commit, tag, or branch to build
+        required: false
+        default: custom
+
+permissions: {}
+
+concurrency:
+  group: handbrake-custom-windows-release
+  cancel-in-progress: true
+
+jobs:
+  build_libhb:
+    name: Build CLI / LibHB x64
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      source_sha: ${{ steps.meta.outputs.source_sha }}
+      source_short: ${{ steps.meta.outputs.source_short }}
+      source_date: ${{ steps.meta.outputs.source_date }}
+      version: ${{ steps.meta.outputs.version }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.source_ref || github.sha }}
+          fetch-depth: 0
+
+      - name: Build metadata
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_sha="$(git rev-parse HEAD)"
+          source_short="$(git rev-parse --short=9 HEAD)"
+          source_date="$(git show -s --format=%cs HEAD | tr -d '-')"
+          version="${source_date}-${source_short}"
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
+          echo "source_short=$source_short" >> "$GITHUB_OUTPUT"
+          echo "source_date=$source_date" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Cargo-C toolchain cache
+        id: windows-cargo-c-toolchain
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/bin/cargo-capi
+            ~/.cargo/bin/cargo-cbuild
+            ~/.cargo/bin/cargo-cinstall
+          key: ${{ runner.os }}-${{ runner.arch }}-handbrake-windows-cargo-c-toolchain
+
+      - name: Setup environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y automake autoconf build-essential libtool libtool-bin make meson nasm patch tar yasm zlib1g-dev ninja-build gzip pax libssl-dev
+          rustup target add x86_64-pc-windows-gnu
+
+      - name: Setup MinGW toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="mingw-w64-toolchain-11.0.1-ucrt-linux-x86_64.tar.gz"
+          url="https://github.com/HandBrake/HandBrake-toolchains/releases/download/1.0/${archive}"
+          expected="4ebef58a5c816e52ae8973612fe095c1eca303f1"
+
+          wget -q --show-progress "$url"
+          actual="$(sha1sum "$archive" | awk '{print $1}')"
+          if [[ "$actual" != "$expected" ]]; then
+            echo "::error::Toolchain checksum mismatch. Expected $expected, got $actual"
+            exit 1
+          fi
+
+          mkdir toolchains
+          tar -xzf "$archive" -C toolchains
+
+      - name: Setup Cargo-C
+        if: steps.windows-cargo-c-toolchain.outputs.cache-hit != 'true'
+        run: cargo install cargo-c
+
+      - name: Build CLI and LibHB
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$GITHUB_WORKSPACE/toolchains/mingw-w64-toolchain-11.0.1-ucrt-linux-x86_64/mingw-w64-x86_64/bin:$PATH"
+          export PATH="/usr/bin:$PATH"
+
+          ./configure \
+            --cross=x86_64-w64-mingw32 \
+            --enable-qsv \
+            --enable-vce \
+            --enable-nvenc \
+            --enable-nvdec \
+            --launch-jobs=0 \
+            --launch
+
+          cd build
+          make pkg.create.zip
+
+      - name: Verify NVENC compatibility pin
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'nv-codec-headers-13.0.19.0' contrib/nvenc/module.defs
+          if grep -Fq 'nv-codec-headers-13.1' contrib/nvenc/module.defs; then
+            echo "::error::NVENC 13.1 headers leaked into the custom build."
+            exit 1
+          fi
+
+      - name: Upload LibHB
+        uses: actions/upload-artifact@v7
+        with:
+          name: LibHandBrake-x64
+          path: build/libhb/hb.dll
+          if-no-files-found: error
+
+      - name: Upload CLI
+        uses: actions/upload-artifact@v7
+        with:
+          name: HandBrakeCLI-x64
+          path: build/HandBrakeCLI.exe
+          if-no-files-found: error
+
+  build_gui:
+    name: Build Windows GUI x64
+    runs-on: windows-2022
+    needs: build_libhb
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.build_libhb.outputs.version }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.build_libhb.outputs.source_sha }}
+          fetch-depth: 0
+
+      - name: Download LibHB
+        uses: actions/download-artifact@v8
+        with:
+          name: LibHandBrake-x64
+          path: win/CS/HandBrakeWPF/bin/publish
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Add NSIS to PATH
+        shell: pwsh
+        run: Add-Content -Path $env:GITHUB_PATH -Value 'C:\Program Files (x86)\NSIS'
+
+      - name: Build Windows GUI
+        shell: pwsh
+        run: dotnet msbuild win\cs\build.xml /t:x64
+
+      - name: Prepare installer and portable ZIP
+        shell: cmd
+        run: |
+          set FILENAME=HandBrake-%VERSION%-x86_64-Win_GUI.exe
+          set FILENAMEZIP=HandBrake-%VERSION%-x86_64-Win_GUI.zip
+
+          cd win\CS\HandBrakeWPF\bin\publish
+          move HandBrake-*-Win_GUI.exe %FILENAME%
+          cd ..
+          rmdir /q /s Debug
+          move publish HandBrake
+          7z a %FILENAMEZIP% * -x!Release\ -x!HandBrake\%FILENAME% -x!HandBrake\*.nsi -x!HandBrake\*.config -x!*HandBrake\*.xml -x!*HandBrake\*.pdb -x!*HandBrake\*.bmp -x!HandBrake\*.zip -x!HandBrake\*.bz2 -x!HandBrake\*.msi -mx9
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: HandBrake-x64-WinExe
+          path: win/CS/HandBrakeWPF/bin/HandBrake/HandBrake-*-x86_64-Win_GUI.exe
+          if-no-files-found: error
+
+      - name: Upload portable ZIP
+        uses: actions/upload-artifact@v7
+        with:
+          name: HandBrake-x64-WinPortable
+          path: win/CS/HandBrakeWPF/bin/HandBrake-*-x86_64-Win_GUI.zip
+          if-no-files-found: error
+
+  publish:
+    name: Publish custom snapshot
+    runs-on: ubuntu-latest
+    needs: [build_libhb, build_gui]
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.build_libhb.outputs.version }}
+      SOURCE_SHA: ${{ needs.build_libhb.outputs.source_sha }}
+      RELEASE_TAG: custom-win
+
+    steps:
+      - name: Download installer
+        uses: actions/download-artifact@v8
+        with:
+          name: HandBrake-x64-WinExe
+          path: release
+
+      - name: Download portable ZIP
+        uses: actions/download-artifact@v8
+        with:
+          name: HandBrake-x64-WinPortable
+          path: release
+
+      - name: Download CLI
+        uses: actions/download-artifact@v8
+        with:
+          name: HandBrakeCLI-x64
+          path: release/cli
+
+      - name: Prepare release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mv release/cli/HandBrakeCLI.exe "release/HandBrakeCLI-${VERSION}-x86_64.exe"
+          rmdir release/cli
+          (
+            cd release
+            sha256sum HandBrake-* > sha256.txt
+          )
+
+          cat > release-notes.md <<EOF
+          Custom HandBrake snapshot built from the \`custom\u0060 branch.
+
+          - Source commit: \u0060${SOURCE_SHA}\u0060
+          - Version: \u0060${VERSION}\u0060
+          - NVENC headers: \u006013.0.19.0\u0060
+          - NVENC policy: intentionally pinned to API 13.0 for compatibility with NVIDIA drivers older than R610, including 596.49.
+
+          SHA-256 checksums are attached as \u0060sha256.txt\u0060.
+          EOF
+
+      - name: Replace custom-win release
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release delete "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --cleanup-tag \
+              --yes
+          fi
+
+          gh release create "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$SOURCE_SHA" \
+            --title "HandBrake Custom Windows Snapshot ${VERSION}" \
+            --notes-file release-notes.md \
+            --prerelease \
+            release/*
+
+      - name: Dispatch Scoop Excavator
+        env:
+          SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${SCOOP_BUCKET_TOKEN:-}" ]]; then
+            echo "::warning::SCOOP_BUCKET_TOKEN is not configured in marcmy/HandBrake; release published but Scoop dispatch was skipped."
+            exit 0
+          fi
+
+          GH_TOKEN="$SCOOP_BUCKET_TOKEN" gh api \
+            --method POST \
+            repos/marcmy/scoop-bucket/dispatches \
+            -f event_type=handbrake-custom-built \
+            -F client_payload[version]="$VERSION" \
+            -F client_payload[source_sha]="$SOURCE_SHA"
+
+      - name: Summary
+        run: |
+          {
+            echo "## Custom HandBrake snapshot"
+            echo "- Version: $VERSION"
+            echo "- Source: $SOURCE_SHA"
+            echo "- NVENC headers: 13.0.19.0"
+            echo "- Release tag: $RELEASE_TAG"
+          } >> "$GITHUB_STEP_SUMMARY"
