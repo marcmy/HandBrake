@@ -1,0 +1,132 @@
+name: Sync upstream HandBrake
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 */6 * * *'
+
+permissions: {}
+
+concurrency:
+  group: handbrake-custom-upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Merge upstream master
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: write
+
+    steps:
+      - name: Check out custom branch
+        uses: actions/checkout@v7
+        with:
+          ref: custom
+          fetch-depth: 0
+          token: ${{ github.token }}
+          persist-credentials: true
+
+      - name: Fetch upstream master
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/HandBrake/HandBrake.git
+          git fetch --prune --no-tags upstream master
+
+      - name: Merge upstream and preserve NVENC 13.0 compatibility pin
+        id: sync
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          upstream_sha="$(git rev-parse upstream/master)"
+
+          if git merge-base --is-ancestor upstream/master HEAD; then
+            echo "custom already contains current upstream master."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "upstream_sha=$upstream_sha" >> "$GITHUB_OUTPUT"
+            echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          merge_status=0
+          git merge --no-commit --no-ff upstream/master || merge_status=$?
+
+          # If upstream changed the NVENC dependency definition too, start from
+          # upstream's version of that file and then re-apply only our 13.0 pin.
+          if git diff --name-only --diff-filter=U | grep -Fxq 'contrib/nvenc/module.defs'; then
+            git checkout --theirs -- contrib/nvenc/module.defs
+          fi
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('contrib/nvenc/module.defs')
+          text = path.read_text()
+
+          replacements = [
+              (r'^NVENC\.FETCH\.url\s+=.*$',
+               'NVENC.FETCH.url      = https://github.com/HandBrake/HandBrake-contribs/releases/download/contribs2/nv-codec-headers-13.0.19.0.tar.gz'),
+              (r'^NVENC\.FETCH\.url\s+\+=.*$',
+               'NVENC.FETCH.url     += https://github.com/FFmpeg/nv-codec-headers/releases/download/n13.0.19.0/nv-codec-headers-13.0.19.0.tar.gz'),
+              (r'^NVENC\.FETCH\.sha256\s+=.*$',
+               'NVENC.FETCH.sha256   = 13da39edb3a40ed9713ae390ca89faa2f1202c9dda869ef306a8d4383e242bee'),
+          ]
+
+          for pattern, replacement in replacements:
+              text, count = re.subn(pattern, replacement, text, count=1, flags=re.MULTILINE)
+              if count != 1:
+                  raise SystemExit(f'Unable to re-apply NVENC 13.0 pin: pattern not found: {pattern}')
+
+          path.write_text(text)
+          PY
+
+          git add contrib/nvenc/module.defs
+
+          unresolved="$(git diff --name-only --diff-filter=U)"
+          if [[ -n "$unresolved" ]]; then
+            echo "::error::Unresolved upstream merge conflicts remain:"
+            printf '%s\n' "$unresolved"
+            exit 1
+          fi
+
+          if [[ "$merge_status" -ne 0 ]] && ! git rev-parse -q --verify MERGE_HEAD >/dev/null; then
+            echo "::error::git merge failed without creating a resolvable merge state."
+            exit "$merge_status"
+          fi
+
+          git commit --no-edit
+          git push origin HEAD:refs/heads/custom
+
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "upstream_sha=$upstream_sha" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Build newly synced code
+        if: steps.sync.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_REF: ${{ steps.sync.outputs.head_sha }}
+        run: |
+          gh workflow run custom-windows-release.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref custom \
+            -f source_ref="$SOURCE_REF"
+
+      - name: Summary
+        if: always()
+        env:
+          UPSTREAM_SHA: ${{ steps.sync.outputs.upstream_sha }}
+          CHANGED: ${{ steps.sync.outputs.changed }}
+          HEAD_SHA: ${{ steps.sync.outputs.head_sha }}
+        run: |
+          {
+            echo "## HandBrake upstream sync"
+            echo "- Upstream master: $UPSTREAM_SHA"
+            echo "- Custom branch changed: $CHANGED"
+            echo "- Custom head: $HEAD_SHA"
+            echo "- NVENC headers: 13.0.19.0"
+          } >> "$GITHUB_STEP_SUMMARY"
