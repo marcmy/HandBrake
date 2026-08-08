@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - custom
+    paths-ignore:
+      - '.github/**'
+      - '**/*.md'
+      - 'docs/**'
   workflow_dispatch:
     inputs:
       source_ref:
@@ -23,6 +27,12 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
+    env:
+      MINGW_DIR: toolchains/mingw-w64-toolchain-11.0.1-ucrt-linux-x86_64
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 1G
+      CCACHE_COMPRESS: 'true'
+      CCACHE_COMPILERCHECK: content
     outputs:
       source_sha: ${{ steps.meta.outputs.source_sha }}
       source_short: ${{ steps.meta.outputs.source_short }}
@@ -60,13 +70,37 @@ jobs:
             ~/.cargo/bin/cargo-cinstall
           key: ${{ runner.os }}-${{ runner.arch }}-handbrake-windows-cargo-c-toolchain
 
+      - name: MinGW toolchain cache
+        id: windows-mingw-toolchain
+        uses: actions/cache@v6
+        with:
+          path: ${{ env.MINGW_DIR }}
+          key: ${{ runner.os }}-${{ runner.arch }}-handbrake-mingw-ucrt-11.0.1
+
+      - name: Contrib distfile cache
+        uses: actions/cache@v6
+        with:
+          path: download
+          key: ${{ runner.os }}-${{ runner.arch }}-handbrake-win64-distfiles-${{ hashFiles('contrib/**/module.defs') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-handbrake-win64-distfiles-
+
+      - name: Compiler cache
+        uses: actions/cache@v6
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ runner.os }}-${{ runner.arch }}-handbrake-win64-ccache-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-handbrake-win64-ccache-
+
       - name: Setup environment
         run: |
           sudo apt-get update
-          sudo apt-get install -y automake autoconf build-essential libtool libtool-bin make meson nasm patch tar yasm zlib1g-dev ninja-build gzip pax libssl-dev
+          sudo apt-get install -y automake autoconf build-essential ccache libtool libtool-bin make meson nasm patch tar yasm zlib1g-dev ninja-build gzip pax libssl-dev
           rustup target add x86_64-pc-windows-gnu
 
       - name: Setup MinGW toolchain
+        if: steps.windows-mingw-toolchain.outputs.cache-hit != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -81,19 +115,33 @@ jobs:
             exit 1
           fi
 
-          mkdir toolchains
+          mkdir -p toolchains
           tar -xzf "$archive" -C toolchains
 
       - name: Setup Cargo-C
         if: steps.windows-cargo-c-toolchain.outputs.cache-hit != 'true'
         run: cargo install cargo-c
 
+      - name: Setup compiler cache wrappers
+        shell: bash
+        run: |
+          set -euo pipefail
+          wrapper_dir="$GITHUB_WORKSPACE/ccache-wrappers"
+          mkdir -p "$wrapper_dir" "$CCACHE_DIR"
+          ccache_bin="$(command -v ccache)"
+          ln -sf "$ccache_bin" "$wrapper_dir/x86_64-w64-mingw32-gcc"
+          ln -sf "$ccache_bin" "$wrapper_dir/x86_64-w64-mingw32-g++"
+          ccache --zero-stats
+          ccache --show-config
+
       - name: Build CLI and LibHB
         shell: bash
         run: |
           set -euo pipefail
-          export PATH="$GITHUB_WORKSPACE/toolchains/mingw-w64-toolchain-11.0.1-ucrt-linux-x86_64/mingw-w64-x86_64/bin:$PATH"
-          export PATH="/usr/bin:$PATH"
+          export PATH="$GITHUB_WORKSPACE/ccache-wrappers:$GITHUB_WORKSPACE/$MINGW_DIR/mingw-w64-x86_64/bin:/usr/bin:$PATH"
+
+          echo "Cross C compiler: $(command -v x86_64-w64-mingw32-gcc)"
+          x86_64-w64-mingw32-gcc --version | head -n 1
 
           ./configure \
             --cross=x86_64-w64-mingw32 \
@@ -106,6 +154,11 @@ jobs:
 
           cd build
           make pkg.create.zip
+
+      - name: Compiler cache statistics
+        if: always()
+        shell: bash
+        run: ccache --show-stats
 
       - name: Verify NVENC compatibility pin
         shell: bash
