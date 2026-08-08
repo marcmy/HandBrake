@@ -35,13 +35,14 @@ jobs:
           git remote add upstream https://github.com/HandBrake/HandBrake.git
           git fetch --prune --no-tags upstream master
 
-      - name: Merge upstream and preserve NVENC 13.0 compatibility pin
+      - name: Merge upstream and preserve fork policy
         id: sync
         shell: bash
         run: |
           set -euo pipefail
 
           upstream_sha="$(git rev-parse upstream/master)"
+          original_head="$(git rev-parse HEAD)"
 
           if git merge-base --is-ancestor upstream/master HEAD; then
             echo "custom already contains current upstream master."
@@ -54,8 +55,15 @@ jobs:
           merge_status=0
           git merge --no-commit --no-ff upstream/master || merge_status=$?
 
-          # If upstream changed the NVENC dependency definition too, start from
-          # upstream's version of that file and then re-apply only our 13.0 pin.
+          # Keep the fork's workflow directory exactly as it was before the merge.
+          # This prevents upstream CI/bots from being reintroduced or modified.
+          git rm -r -f --ignore-unmatch .github/workflows
+          if git cat-file -e "$original_head:.github/workflows" 2>/dev/null; then
+            git checkout "$original_head" -- .github/workflows
+          fi
+
+          # Start from upstream's NVENC definition if it conflicted, then reapply
+          # only our compatibility pin.
           if git diff --name-only --diff-filter=U | grep -Fxq 'contrib/nvenc/module.defs'; then
             git checkout --theirs -- contrib/nvenc/module.defs
           fi
@@ -88,7 +96,7 @@ jobs:
 
           unresolved="$(git diff --name-only --diff-filter=U)"
           if [[ -n "$unresolved" ]]; then
-            echo "::error::Unresolved upstream merge conflicts remain:"
+            echo "::error::Unresolved upstream merge conflicts remain outside fork-managed workflows/NVENC policy:"
             printf '%s\n' "$unresolved"
             exit 1
           fi
@@ -96,6 +104,12 @@ jobs:
           if [[ "$merge_status" -ne 0 ]] && ! git rev-parse -q --verify MERGE_HEAD >/dev/null; then
             echo "::error::git merge failed without creating a resolvable merge state."
             exit "$merge_status"
+          fi
+
+          if ! git diff --quiet "$original_head" -- .github/workflows; then
+            echo "::error::Fork workflow files changed during the upstream merge."
+            git diff "$original_head" -- .github/workflows
+            exit 1
           fi
 
           git commit --no-edit
@@ -129,4 +143,5 @@ jobs:
             echo "- Custom branch changed: $CHANGED"
             echo "- Custom head: $HEAD_SHA"
             echo "- NVENC headers: 13.0.19.0"
+            echo "- Fork workflows preserved: yes"
           } >> "$GITHUB_STEP_SUMMARY"
