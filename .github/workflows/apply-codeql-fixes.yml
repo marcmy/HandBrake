@@ -12,7 +12,8 @@ permissions:
 
 jobs:
   patch:
-    runs-on: ubuntu-latest
+    runs-on: windows-2025
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -22,7 +23,7 @@ jobs:
       - name: Apply targeted fixes
         shell: bash
         run: |
-          python3 - <<'PY'
+          python - <<'PY'
           from pathlib import Path
 
           def replace_exact(path, old, new, expected=1):
