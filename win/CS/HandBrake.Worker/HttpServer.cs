@@ -206,21 +206,24 @@ namespace HandBrake.Worker
                     context.Response.OutputStream.Write(buf, 0, buf.Length);
 
                     watch.Stop();
-                    Debug.WriteLine(string.Format(" - Processed call to: '/{0}', Took {1}ms", path, watch.ElapsedMilliseconds), ConsoleColor.White, true);
+                    Debug.WriteLine($" - Processed call to: '/{path}', Took {watch.ElapsedMilliseconds}ms");
                     return;
                 }
 
                 if (!path.Equals("Version") && !tokenService.IsAuthenticated(token))
                 {
-                    string rstr = string.Format("HandBrake Worker: Access Denied to '/{0}'. The token provided in the HTTP header was not valid.", path);
-                    ConsoleOutput.WriteLine(rstr, ConsoleColor.Red, true);
-                    byte[] buf = Encoding.UTF8.GetBytes(rstr);
+                    string logMessage = $"HandBrake Worker: Access Denied to '/{path}'. The token provided in the HTTP header was not valid.";
+                    ConsoleOutput.WriteLine(logMessage, ConsoleColor.Red, true);
+
+                    const string responseMessage = "HandBrake Worker: Access Denied. The token provided in the HTTP header was not valid.";
+                    byte[] buf = Encoding.UTF8.GetBytes(responseMessage);
                     context.Response.StatusCode = (int)HttpStatusCode.Unauthorized;
+                    context.Response.ContentType = "text/plain; charset=utf-8";
                     context.Response.ContentLength64 = buf.Length;
                     context.Response.OutputStream.Write(buf, 0, buf.Length);
 
                     watch.Stop();
-                    Debug.WriteLine(string.Format(" - Processed call to: '/{0}', Took {1}ms", path, watch.ElapsedMilliseconds), ConsoleColor.White, true);
+                    Debug.WriteLine($" - Processed call to: '/{path}', Took {watch.ElapsedMilliseconds}ms");
                     return;
                 }
 
@@ -243,7 +246,7 @@ namespace HandBrake.Worker
                 }
 
                 watch.Stop();
-                Debug.WriteLine(string.Format(" - Processed call to: '/{0}', Took {1}ms", path, watch.ElapsedMilliseconds), ConsoleColor.White, true);
+                Debug.WriteLine($" - Processed call to: '/{path}', Took {watch.ElapsedMilliseconds}ms");
             }
             catch (Exception exc)
             {
