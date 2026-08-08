@@ -256,7 +256,8 @@ static int hb_motion_metric_init(hb_motion_metric_object_t *metric,
         fast = 1;
         int approx_height = init->geometry.height / 4;
         int approx_width  = init->geometry.width  / 4;
-        int size = approx_height * approx_width * sizeof(uint8_t) * pv->bps;
+        size_t size = (size_t)approx_height * (size_t)approx_width *
+                      sizeof(uint8_t) * (size_t)pv->bps;
         pv->approx_buf_a  = malloc(size);
         pv->approx_buf_b  = malloc(size);
         if (pv->approx_buf_a == NULL || pv->approx_buf_b == NULL)
