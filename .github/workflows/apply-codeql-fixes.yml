@@ -134,37 +134,6 @@ jobs:
           }
           """,
           )
-
-          # CodeQL: keep request data out of format strings and HTML-encode the
-          # reflected request path before writing it to the HTTP response.
-          replace_exact(
-              "win/CS/HandBrake.Worker/HttpServer.cs",
-              """                    Debug.WriteLine(string.Format(\" - Processed call to: '/{0}', Took {1}ms\", path, watch.ElapsedMilliseconds), ConsoleColor.White, true);
-          """,
-              """                    Debug.WriteLine($\" - Processed call to: '/{path}', Took {watch.ElapsedMilliseconds}ms\", ConsoleColor.White, true);
-          """,
-              expected=3,
-          )
-
-          replace_exact(
-              "win/CS/HandBrake.Worker/HttpServer.cs",
-              """                    string rstr = string.Format(\"HandBrake Worker: Access Denied to '/{0}'. The token provided in the HTTP header was not valid.\", path);
-                      ConsoleOutput.WriteLine(rstr, ConsoleColor.Red, true);
-                      byte[] buf = Encoding.UTF8.GetBytes(rstr);
-                      context.Response.StatusCode = (int)HttpStatusCode.Unauthorized;
-                      context.Response.ContentLength64 = buf.Length;
-                      context.Response.OutputStream.Write(buf, 0, buf.Length);
-          """,
-              """                    string logMessage = $\"HandBrake Worker: Access Denied to '/{path}'. The token provided in the HTTP header was not valid.\";
-                      ConsoleOutput.WriteLine(logMessage, ConsoleColor.Red, true);
-                      string responseMessage = $\"HandBrake Worker: Access Denied to '/{WebUtility.HtmlEncode(path)}'. The token provided in the HTTP header was not valid.\";
-                      byte[] buf = Encoding.UTF8.GetBytes(responseMessage);
-                      context.Response.StatusCode = (int)HttpStatusCode.Unauthorized;
-                      context.Response.ContentType = \"text/plain; charset=utf-8\";
-                      context.Response.ContentLength64 = buf.Length;
-                      context.Response.OutputStream.Write(buf, 0, buf.Length);
-          """,
-          )
           PY
 
           git diff --check
@@ -174,8 +143,7 @@ jobs:
             libhb/motion_metric.c \
             libhb/decomb.c \
             libhb/muxavformat.c \
-            libhb/common.c \
-            win/CS/HandBrake.Worker/HttpServer.cs
+            libhb/common.c
 
       - name: Commit fixes and remove one-shot workflow
         shell: bash
@@ -189,7 +157,6 @@ jobs:
             libhb/motion_metric.c \
             libhb/decomb.c \
             libhb/muxavformat.c \
-            libhb/common.c \
-            win/CS/HandBrake.Worker/HttpServer.cs
+            libhb/common.c
           git commit -m "Fix actionable CodeQL findings"
           git push origin HEAD:custom
