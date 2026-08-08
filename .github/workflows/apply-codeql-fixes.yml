@@ -61,15 +61,6 @@ jobs:
           )
 
           replace_exact(
-              "libhb/motion_metric.c",
-              """        int size = approx_height * approx_width * sizeof(uint8_t) * pv->bps;
-          """,
-              """        size_t size = (size_t)approx_height * (size_t)approx_width *
-                              sizeof(uint8_t) * (size_t)pv->bps;
-          """,
-          )
-
-          replace_exact(
               "libhb/decomb.c",
               """            int stride = hb_image_stride(init->pix_fmt, init->geometry.width, 0);
 
@@ -140,7 +131,6 @@ jobs:
           git diff --stat
           git diff -- \
             libhb/templates/nlmeans_template.c \
-            libhb/motion_metric.c \
             libhb/decomb.c \
             libhb/muxavformat.c \
             libhb/common.c
@@ -154,7 +144,6 @@ jobs:
           git add \
             .github/workflows/apply-codeql-fixes.yml \
             libhb/templates/nlmeans_template.c \
-            libhb/motion_metric.c \
             libhb/decomb.c \
             libhb/muxavformat.c \
             libhb/common.c
