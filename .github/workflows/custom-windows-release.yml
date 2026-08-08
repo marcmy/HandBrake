@@ -164,7 +164,7 @@ jobs:
 
       - name: Build Windows GUI
         shell: pwsh
-        run: dotnet msbuild win\cs\build.xml /t:x64
+        run: dotnet msbuild win\cs\build.xml /t:x64 /p:NoWarn=NETSDK1198
 
       - name: Prepare installer and portable ZIP
         shell: cmd
@@ -175,7 +175,7 @@ jobs:
           cd win\CS\HandBrakeWPF\bin\publish
           move HandBrake-*-Win_GUI.exe %FILENAME%
           cd ..
-          rmdir /q /s Debug
+          if exist Debug rmdir /q /s Debug
           move publish HandBrake
           7z a %FILENAMEZIP% * -x!Release\ -x!HandBrake\%FILENAME% -x!HandBrake\*.nsi -x!HandBrake\*.config -x!*HandBrake\*.xml -x!*HandBrake\*.pdb -x!*HandBrake\*.bmp -x!HandBrake\*.zip -x!HandBrake\*.bz2 -x!HandBrake\*.msi -mx9
 
@@ -196,6 +196,7 @@ jobs:
   publish:
     name: Publish custom snapshot
     runs-on: ubuntu-latest
+    environment: scoop-bucket
     needs: [build_libhb, build_gui]
     permissions:
       contents: write
@@ -273,7 +274,7 @@ jobs:
           set -euo pipefail
 
           if [[ -z "${SCOOP_BUCKET_TOKEN:-}" ]]; then
-            echo "::warning::SCOOP_BUCKET_TOKEN is not configured in marcmy/HandBrake; release published but Scoop dispatch was skipped."
+            echo "::warning::SCOOP_BUCKET_TOKEN is not configured in the scoop-bucket environment; release published but Scoop dispatch was skipped."
             exit 0
           fi
 
