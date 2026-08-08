@@ -304,16 +304,33 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
+          # GitHub's release endpoint rejects GITHUB_TOKEN when target_commitish
+          # contains workflow changes relative to the default branch. Keep the
+          # floating tag explicit, then create the release from that existing tag
+          # so target_commitish is not used by the release API.
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+            gh api \
+              --method PATCH \
+              "repos/$GITHUB_REPOSITORY/git/refs/tags/$RELEASE_TAG" \
+              -f sha="$SOURCE_SHA" \
+              -F force=true >/dev/null
+          else
+            gh api \
+              --method POST \
+              "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref="refs/tags/$RELEASE_TAG" \
+              -f sha="$SOURCE_SHA" >/dev/null
+          fi
+
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release delete "$RELEASE_TAG" \
               --repo "$GITHUB_REPOSITORY" \
-              --cleanup-tag \
               --yes
           fi
 
           gh release create "$RELEASE_TAG" \
             --repo "$GITHUB_REPOSITORY" \
-            --target "$SOURCE_SHA" \
             --title "HandBrake Custom Windows Snapshot ${VERSION}" \
             --notes-file release-notes.md \
             --prerelease \
