@@ -78,7 +78,8 @@ static void FUNC(nlmeans_alloc)(const void *in_src,
 
     const pixel *src = in_src;
 
-    pixel *mem   = malloc(bw * bh * sizeof(pixel));
+    const size_t plane_size = (size_t)bw * (size_t)bh * sizeof(pixel);
+    pixel *mem   = malloc(plane_size);
     pixel *image = mem + border + bw * border;
 
     // Copy main image
@@ -453,9 +454,10 @@ static void FUNC(nlmeans_prefilter)(BorderedPlane *src,
         const int bh         = h + 2 * border;
 
         // Duplicate plane
-        pixel *mem_pre = malloc(bw * bh * sizeof(pixel));
+        const size_t prefilter_size = (size_t)bw * (size_t)bh * sizeof(pixel);
+        pixel *mem_pre = malloc(prefilter_size);
         pixel *image_pre = mem_pre + border + bw * border;
-        memcpy(mem_pre, mem, bw * bh * sizeof(pixel));
+        memcpy(mem_pre, mem, prefilter_size);
 
         // Filter plane; should already have at least 2px extra border on each side
         if (filter_type & NLMEANS_PREFILTER_MODE_CSM5X5)

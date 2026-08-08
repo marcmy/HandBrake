@@ -396,11 +396,13 @@ static int hb_decomb_init(hb_filter_object_t *filter,
         if (pv->post_processing > 1)
         {
             int stride = hb_image_stride(init->pix_fmt, init->geometry.width, 0);
+            const size_t derivative_size =
+                (size_t)init->geometry.height * (size_t)stride * sizeof(int);
 
-            pv->cx2 = (int *)eedi2_aligned_malloc(init->geometry.height * stride * sizeof(int), 16);
-            pv->cy2 = (int *)eedi2_aligned_malloc(init->geometry.height * stride * sizeof(int), 16);
-            pv->cxy = (int *)eedi2_aligned_malloc(init->geometry.height * stride * sizeof(int), 16);
-            pv->tmpc = (int*)eedi2_aligned_malloc(init->geometry.height * stride * sizeof(int), 16);
+            pv->cx2 = (int *)eedi2_aligned_malloc(derivative_size, 16);
+            pv->cy2 = (int *)eedi2_aligned_malloc(derivative_size, 16);
+            pv->cxy = (int *)eedi2_aligned_malloc(derivative_size, 16);
+            pv->tmpc = (int*)eedi2_aligned_malloc(derivative_size, 16);
 
             if (!pv->cx2 || !pv->cy2 || !pv->cxy || !pv->tmpc)
             {

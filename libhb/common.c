@@ -6286,16 +6286,18 @@ hb_list_t *hb_subtitle_list_copy(const hb_list_t *src)
  *********************************************************************/
 void hb_subtitle_close( hb_subtitle_t **_sub )
 {
-    hb_subtitle_t * sub = *_sub;
-    if ( _sub && sub )
+    if (_sub == NULL || *_sub == NULL)
     {
-        free((char*)sub->name);
-        free((char*)sub->config.name);
-        free((char*)sub->config.src_filename);
-        hb_data_close(&sub->extradata);
-        free(sub);
-        *_sub = NULL;
+        return;
     }
+
+    hb_subtitle_t * sub = *_sub;
+    free((char*)sub->name);
+    free((char*)sub->config.name);
+    free((char*)sub->config.src_filename);
+    hb_data_close(&sub->extradata);
+    free(sub);
+    *_sub = NULL;
 }
 
 /**********************************************************************
