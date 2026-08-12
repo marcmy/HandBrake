@@ -160,16 +160,6 @@ jobs:
         shell: bash
         run: ccache --show-stats
 
-      - name: Verify NVENC compatibility pin
-        shell: bash
-        run: |
-          set -euo pipefail
-          grep -F 'nv-codec-headers-13.0.19.0' contrib/nvenc/module.defs
-          if grep -Fq 'nv-codec-headers-13.1' contrib/nvenc/module.defs; then
-            echo "::error::NVENC 13.1 headers leaked into the custom build."
-            exit 1
-          fi
-
       - name: Upload LibHB
         uses: actions/upload-artifact@v7
         with:
@@ -243,7 +233,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: HandBrake-x64-WinPortable
-          path: win/CS/HandBrakeWPF/bin/HandBrake-*-x86_64-Win_GUI.zip
+          path: win/CS/HandBrakeWPF/bin/HandBrake/HandBrake-*-x86_64-Win_GUI.zip
           if-no-files-found: error
 
   publish:
@@ -294,8 +284,8 @@ jobs:
 
           - Source commit: ${SOURCE_SHA}
           - Version: ${VERSION}
-          - NVENC headers: 13.0.19.0
-          - NVENC policy: intentionally pinned to API 13.0 for compatibility with NVIDIA drivers older than R610, including 596.49.
+          - NVENC headers: 13.1.15.0
+          - NVENC policy: follows the custom branch's current NVENC header version.
 
           SHA-256 checksums are attached as sha256.txt.
           EOF
@@ -361,6 +351,6 @@ jobs:
             echo "## Custom HandBrake snapshot"
             echo "- Version: $VERSION"
             echo "- Source: $SOURCE_SHA"
-            echo "- NVENC headers: 13.0.19.0"
+            echo "- NVENC headers: 13.1.15.0"
             echo "- Release tag: $RELEASE_TAG"
           } >> "$GITHUB_STEP_SUMMARY"
