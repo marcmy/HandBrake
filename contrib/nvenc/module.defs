@@ -1,6 +1,7 @@
 $(eval $(call import.MODULE.defs,NVENC,nvenc))
 $(eval $(call import.CONTRIB.defs,NVENC))
 
+# Custom branch follows the current NVENC headers instead of enforcing the old 13.0 compatibility pin.
 NVENC.FETCH.url      = https://github.com/HandBrake/HandBrake-contribs/releases/download/contribs2/nv-codec-headers-13.1.15.0.tar.gz
 NVENC.FETCH.url     += https://github.com/FFmpeg/nv-codec-headers/releases/download/n13.1.15.0/nv-codec-headers-13.1.15.0.tar.gz
 NVENC.FETCH.sha256   = 52532ceade3d5c1af62624986f13cf01b63c910576b08c0c278756c5e4b41ad0
