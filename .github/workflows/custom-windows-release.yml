@@ -233,7 +233,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: HandBrake-x64-WinPortable
-          path: win/CS/HandBrakeWPF/bin/HandBrake/HandBrake-*-x86_64-Win_GUI.zip
+          path: win/CS/HandBrakeWPF/bin/HandBrake-*-x86_64-Win_GUI.zip
           if-no-files-found: error
 
   publish:
