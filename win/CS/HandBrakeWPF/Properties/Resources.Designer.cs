@@ -1981,7 +1981,7 @@ namespace HandBrakeWPF.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Copy to Clipboard.
+        ///   Looks up a localized string similar to Copy.
         /// </summary>
         public static string Generic_CopyToClipboard {
             get {
@@ -2080,7 +2080,7 @@ namespace HandBrakeWPF.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Choose log file :.
+        ///   Looks up a localized string similar to Log file:.
         /// </summary>
         public static string LogView_ChooseLogFile {
             get {
@@ -2089,7 +2089,16 @@ namespace HandBrakeWPF.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Copy to clipboard.
+        ///   Looks up a localized string similar to Clear Completed.
+        /// </summary>
+        public static string LogView_ClearCompletedLogs {
+            get {
+                return ResourceManager.GetString("LogView_ClearCompletedLogs", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Copy.
         /// </summary>
         public static string LogView_CopyClipboard {
             get {
@@ -6006,11 +6015,11 @@ namespace HandBrakeWPF.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Preset Description:.
+        ///   Looks up a localized string similar to Clear search.
         /// </summary>
-        public static string PresetPane_Desc {
+        public static string PresetPane_ClearSearch {
             get {
-                return ResourceManager.GetString("PresetPane_Desc", resourceCulture);
+                return ResourceManager.GetString("PresetPane_ClearSearch", resourceCulture);
             }
         }
         
@@ -6056,6 +6065,15 @@ namespace HandBrakeWPF.Properties {
         public static string PresetPane_MoveUp {
             get {
                 return ResourceManager.GetString("PresetPane_MoveUp", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Search ....
+        /// </summary>
+        public static string PresetPane_Search {
+            get {
+                return ResourceManager.GetString("PresetPane_Search", resourceCulture);
             }
         }
         
