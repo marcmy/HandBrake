@@ -190,7 +190,7 @@ static void send(hb_work_private_t *pv, int nsamples)
     float **buffer;
 
     hb_list_getbytes(pv->list, (uint8_t *)pv->buf,
-                     nsamples * pv->out_discrete_channels * sizeof(float),
+                     (size_t)nsamples * pv->out_discrete_channels * sizeof(float),
                      &pv->pts, NULL);
     if (pv->first_pts == AV_NOPTS_VALUE)
     {
