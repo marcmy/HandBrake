@@ -1,6 +1,10 @@
 name: Flatpak Build
 
-on: [push, pull_request]
+on:
+  push:
+    paths-ignore: [".github/dependabot.yml"]
+  pull_request:
+    paths-ignore: [".github/dependabot.yml"]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}

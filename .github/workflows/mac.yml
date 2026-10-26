@@ -1,6 +1,10 @@
 name: macOS build
 
-on: [push, pull_request]
+on:
+  push:
+    paths-ignore: [".github/dependabot.yml"]
+  pull_request:
+    paths-ignore: [".github/dependabot.yml"]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -14,7 +18,7 @@ jobs:
     - uses: actions/checkout@v7
     - uses: actions/setup-python@v7
       with:
-        python-version: '3.13.7'
+        python-version: '3.15.1'
 
     - name: Toolchain Cache
       id: mac-toolchain
