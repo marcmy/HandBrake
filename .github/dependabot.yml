@@ -8,3 +8,15 @@ updates:
       time: "12:00"
       timezone: "America/New_York"
     open-pull-requests-limit: 100
+
+  - package-ecosystem: "nuget"
+    directories:
+      - "/win/CS/HandBrake.App.Core"
+      - "/win/CS/HandBrake.Interop"
+      - "/win/CS/HandBrake.Worker"
+      - "/win/CS/HandBrakeWPF"
+    schedule:
+      interval: "daily"
+      time: "12:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 100
