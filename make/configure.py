@@ -975,12 +975,12 @@ class Project( Action ):
             self.version = repo.date.strftime("%Y%m%d%H%M%S")
             self.version += '-%s' % (repo.shorthash)
             if repo.branch != '':
-                self.version += '-%s' % (repo.branch)
+                self.version += '-%s' % (repo.branch.replace('/', '-'))
 
             self.debversion = repo.date.strftime("%Y%m%d%H%M%S")
             self.debversion += '-%s' % (repo.shorthash)
             if repo.branch != '':
-                self.debversion += '-%s' % (repo.branch)
+                self.debversion += '-%s' % (repo.branch.replace('/', '-'))
 
             url_ctype = '_unstable'
             url_ntype = 'unstable'
