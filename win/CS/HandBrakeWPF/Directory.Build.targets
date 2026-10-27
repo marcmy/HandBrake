@@ -1,0 +1,13 @@
+<Project>
+  <!-- Linux SDKs can fall back to .NET 9 WindowsDesktop pruning data during
+       the first restore. Match the .NET 10 runtime graph used by Windows and
+       packages.lock.json: https://github.com/dotnet/sdk/issues/52557 -->
+  <Target Name="CorrectWindowsDesktopCodeDomPruning"
+          AfterTargets="AddPrunePackageReferences"
+          Condition="'$(OS)' != 'Windows_NT' and '$(TargetFrameworkVersion)' == 'v10.0' and '$(UseWindowsForms)' == 'true'">
+    <ItemGroup>
+      <PrunePackageReference Remove="System.CodeDom" />
+      <PrunePackageReference Include="System.CodeDom" Version="10.0.32767" />
+    </ItemGroup>
+  </Target>
+</Project>
