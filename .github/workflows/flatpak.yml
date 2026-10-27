@@ -1,6 +1,10 @@
 name: Flatpak Build
 
-on: [push, pull_request]
+on:
+  push:
+    paths-ignore: [".github/dependabot.yml"]
+  pull_request:
+    paths-ignore: [".github/dependabot.yml"]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -12,6 +16,13 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v7
+
+    - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+      with:
+        python-version: '3.15.1'
+
+    - name: Validate branch-safe package versions before downloading runtimes
+      run: python test/test_project_version.py
 
     - name: Setup Environment
       run: |
