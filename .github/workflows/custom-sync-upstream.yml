@@ -130,6 +130,12 @@ jobs:
             --ref custom \
             -f source_ref="$SOURCE_REF"
 
+          # Pushes made with github.token do not trigger push workflows, so
+          # start the regular platform builds explicitly.
+          for workflow in linux.yml mac.yml windows.yml flatpak.yml; do
+            gh workflow run "$workflow" --repo "$GITHUB_REPOSITORY" --ref custom
+          done
+
       - name: Summary
         if: always()
         env:
